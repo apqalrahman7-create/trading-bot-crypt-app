@@ -1,0 +1,158 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+ runApp(const MyApp());
+}
+
+class CustomerService {
+ static const _prefix = 'code_';
+
+ String _codeKey(String phone) => '$_prefix$phone';
+
+ String generateCode() {
+ final random = Random();
+ return List.generate(6, (_) => random.nextInt(10)).join();
+ }
+
+ Future<void> saveCode(String phone, String code) async {
+ final prefs = await SharedPreferences.getInstance();
+ await prefs.setString(_codeKey(phone), code);
+ }
+
+ Future<String?> getCode(String phone) async {
+ final prefs = await SharedPreferences.getInstance();
+ return prefs.getString(_codeKey(phone));
+ }
+}
+
+class MyApp extends StatelessWidget {
+ const MyApp({super.key});
+
+ @override
+ Widget build(BuildContext context) {
+ return MaterialApp(
+ debugShowCheckedModeBanner: false,
+ title: 'رمز التفعيل',
+ theme: ThemeData(
+ useMaterial3: true,
+ colorSchemeSeed: Colors.blue,
+ ),
+ home: const HomePage(),
+ );
+ }
+}
+
+class HomePage extends StatefulWidget {
+ const HomePage({super.key});
+
+ @override
+ State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+ final phoneController = TextEditingController();
+ final CustomerService service = CustomerService();
+
+ String? generatedCode;
+ String message = '';
+
+ Future<void> generateAndSaveCode() async {
+ final phone = phoneController.text.trim();
+
+ if (phone.isEmpty) {
+ setState(() => message = 'أدخل رقم الهاتف أولاً');
+ return;
+ }
+
+ final code = service.generateCode();
+ await service.saveCode(phone, code);
+
+ setState(() {
+ generatedCode = code;
+ message = 'تم توليد رمز التفعيل وحفظه للمشترك';
+ });
+
+ showDialog(
+ context: context,
+ builder: (_) => AlertDialog(
+ title: const Text('رمز التفعيل'),
+ content: Text('تم توليد الرمز للمشترك:\n\n$code'),
+ actions: [
+ TextButton(
+ onPressed: () => Navigator.pop(context),
+ child: const Text('موافق'),
+ ),
+ ],
+ ),
+ );
+ }
+
+ Future<void> loadSavedCode() async {
+ final phone = phoneController.text.trim();
+
+ if (phone.isEmpty) {
+ setState(() => message = 'أدخل رقم الهاتف أولاً');
+ return;
+ }
+
+ final code = await service.getCode(phone);
+
+ setState(() {
+ generatedCode = code;
+ message = code == null
+ ? 'لا يوجد رمز محفوظ لهذا الرقم'
+ : 'تم العثور على الرمز المحفوظ';
+ });
+ }
+
+ @override
+ void dispose() {
+ phoneController.dispose();
+ super.dispose();
+ }
+
+ @override
+ Widget build(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('توليد رمز التفعيل'),
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.stretch,
+ children: [
+ TextField(
+ controller: phoneController,
+ keyboardType: TextInputType.phone,
+ decoration: const InputDecoration(
+ labelText: 'رقم الهاتف',
+ border: OutlineInputBorder(),
+ ),
+ ),
+ const SizedBox(height: 12),
+ ElevatedButton(
+ onPressed: generateAndSaveCode,
+ child: const Text('موافق'),
+ ),
+ const SizedBox(height: 8),
+ OutlinedButton(
+ onPressed: loadSavedCode,
+ child: const Text('عرض الرمز المحفوظ'),
+ ),
+ const SizedBox(height: 20),
+ if (generatedCode != null)
+ Text(
+ 'الرمز: $generatedCode',
+ style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+ ),
+ const SizedBox(height: 8),
+ Text(message),
+ ],
+ ),
+ ),
+ );
+ }
+}
